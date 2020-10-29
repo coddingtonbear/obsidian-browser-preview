@@ -1,0 +1,8 @@
+{
+  "id": "obsidian-browser-preview",
+  "name": "Obsidian Browser Preview",
+  "description": "Open your obsidian preview in your default browser",
+  "isDesktopOnly": false,
+  "js": "main.js",
+  "version": "0.1.0"
+}
