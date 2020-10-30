@@ -5,6 +5,7 @@ import {
   Plugin,
   TAbstractFile,
   TFile,
+  TFolder,
 } from "obsidian";
 import * as http from "http";
 import * as fs from "fs";
@@ -46,22 +47,10 @@ export default class ObsidianPrint extends Plugin {
     return;
   }
 
-  async writeRawFileResponse(filename: string, response: http.ServerResponse) {
-    const matchingFiles = this.getMatchingFileObjectsForRoute(filename);
-
-    if (matchingFiles.length == 0) {
-      response.writeHead(404, "Not Found");
-      response.write("Not found");
-      response.end();
-      return;
-    } else if (matchingFiles.length > 1) {
-      response.writeHead(404, "Multiple Matches");
-      response.write("Multiple files sharing that name found.");
-      response.end();
-      return;
-    }
-
-    const matchingFile = matchingFiles[0] as TFile;
+  async writeRawFileResponse(
+    matchingFile: TFile,
+    response: http.ServerResponse
+  ) {
     const data = await this.app.vault.readBinary(matchingFile);
 
     response.writeHead(200, "OK", {
@@ -71,11 +60,45 @@ export default class ObsidianPrint extends Plugin {
     response.end();
   }
 
-  getMatchingFileObjectsForRoute(filename: string): TAbstractFile[] {
-    const root = this.app.vault.getRoot();
-    return root.children.filter((fileData: TFile) => {
-      return fileData.path == filename;
+  async writeRedirectResponse(response: http.ServerResponse) {
+    response.writeHead(302, "Found", {
+      Location: `/${
+        (this.app.workspace.activeLeaf.view as FileView).file.path
+      }`,
     });
+    response.end();
+  }
+
+  async loadNewDocument(file: TFile) {
+    if (
+      (this.app.workspace.activeLeaf.view as FileView).file.path !== file.path
+    ) {
+      console.log("Loading new document");
+      await this.app.workspace.activeLeaf.openFile(file);
+    }
+  }
+
+  isTFile(file: TAbstractFile): file is TFile {
+    return (file as TFolder).children === undefined;
+  }
+
+  isTFolder(file: TAbstractFile): file is TFolder {
+    return (file as TFolder).children !== undefined;
+  }
+
+  getMatchingFileObject(folder: TFolder, filename: string): TFile | null {
+    for (const child of folder.children) {
+      if (this.isTFile(child)) {
+        if (child.path === filename || child.path === filename + ".md") {
+          return child;
+        }
+      } else if (this.isTFolder(child)) {
+        const result = this.getMatchingFileObject(child, filename);
+        if (result) {
+          return result;
+        }
+      }
+    }
   }
 
   async requestListener(
@@ -84,11 +107,21 @@ export default class ObsidianPrint extends Plugin {
   ) {
     const parsedUrl = new url.URL(`http://127.0.0.1${request.url}`);
     const location = decodeURI(parsedUrl.pathname).slice(1);
+    const root = this.app.vault.getRoot();
+    const matchingFile = this.getMatchingFileObject(root, location);
 
-    if (location == "") {
+    if (!location) {
+      this.writeRedirectResponse(response);
+    } else if (matchingFile && matchingFile.extension === "md") {
+      await this.loadNewDocument(matchingFile);
       this.writeMarkdownPreviewResponse(response);
+    } else if (matchingFile && matchingFile.extension !== "md") {
+      this.writeRawFileResponse(matchingFile, response);
     } else {
-      this.writeRawFileResponse(location, response);
+      response.writeHead(404, "Not Found");
+      response.write("Not found");
+      response.end();
+      return;
     }
   }
 
@@ -104,12 +137,12 @@ export default class ObsidianPrint extends Plugin {
         const activeView = activeLeaf.view as FileView;
         const filename = activeView.file.path;
 
-        open(`http://127.0.0.1:${this.port}/`);
+        open(`http://127.0.0.1:${this.port}/${filename}`);
       },
     });
     this.addCommand({
       id: "open-preview-debug",
-      name: "Open preview debug",
+      name: "Debug",
       callback: async () => {
         console.log(this);
       },
