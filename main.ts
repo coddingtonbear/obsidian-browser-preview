@@ -6,6 +6,8 @@ import {
   TFile,
 } from "obsidian";
 import * as http from "http";
+import * as fs from "fs";
+import * as url from "url";
 import open from "open";
 
 export default class ObsidianPrint extends Plugin {
@@ -18,10 +20,13 @@ export default class ObsidianPrint extends Plugin {
     request: http.IncomingMessage,
     response: http.ServerResponse
   ) {
-    const location = decodeURI(request.url.slice(1));
+    const parsedUrl = new url.URL(`http://127.0.0.1${request.url}`);
+    const location = decodeURI(parsedUrl.pathname).slice(1);
     const activeLeaf = this.app.workspace.activeLeaf;
     const view = activeLeaf.view as MarkdownView;
     const adapter = this.app.vault.adapter as FileSystemAdapter;
+    const basePath = adapter.getBasePath();
+    const cssPath = basePath + "/obsidian.css";
 
     const root = this.app.vault.getRoot();
 
@@ -49,15 +54,20 @@ export default class ObsidianPrint extends Plugin {
       let body = view.previewMode.containerEl.innerHTML;
 
       const pathReplacements = [
-        `app://local/${encodeURIComponent(adapter.getBasePath())}/`,
+        `app://local/${encodeURIComponent(adapter.getBasePath())}%2F`,
       ];
-      for (const replacement in pathReplacements) {
-        body = body.replace(replacement, "/");
+      for (const replacement of pathReplacements) {
+        body = body.replace(replacement, "");
       }
 
       response.writeHead(200, "OK", { "Content-type": "text/html" });
-      response.write("<html><head><style type='text/css'>");
-      response.write("</style></head><body>");
+      response.write("<!DOCTYPE html><html><head><meta charset='utf-8' />");
+      if (fs.existsSync(cssPath)) {
+        response.write("<style type='text/css'>");
+        response.write(fs.readFileSync(cssPath));
+        response.write("</style>");
+      }
+      response.write("</head><body>");
       response.write(body);
       response.write("</body></html>");
       response.end();
