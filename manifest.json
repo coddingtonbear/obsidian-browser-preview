@@ -4,5 +4,5 @@
   "description": "Open your obsidian preview in your default browser",
   "isDesktopOnly": false,
   "js": "main.js",
-  "version": "0.3.0"
+  "version": "0.3.1"
 }

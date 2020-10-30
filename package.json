@@ -1,6 +1,6 @@
 {
   "name": "obsidian-browser-preview",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Open your obsidian preview in your default browser.",
   "main": "main.js",
   "scripts": {
